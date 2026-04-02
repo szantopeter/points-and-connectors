@@ -17,7 +17,8 @@
     padding: 24px;
   }
   h1 { font-size: 1.4rem; font-weight: 500; margin-bottom: 8px; color: #fff; }
-  .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 24px; }
+  .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 20px; }
+
   .controls {
     display: flex;
     align-items: center;
@@ -33,31 +34,49 @@
     gap: 6px;
   }
   label { font-size: 0.8rem; color: #aaa; }
-  input[type=range] {
-    width: 220px;
-    accent-color: #5b8dee;
+  input[type=range] { width: 160px; }
+  #sliderOuter { accent-color: #5b8dee; }
+  #sliderInner { accent-color: #ee8d5b; }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
+  .step-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid #2a2f3f;
+    background: #1c2133;
+    color: #ccc;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-btn:hover { background: #2a3150; color: #fff; }
+
   .stats {
     display: flex;
-    gap: 32px;
+    gap: 28px;
     margin-bottom: 20px;
     flex-wrap: wrap;
     justify-content: center;
   }
-  .stat {
-    text-align: center;
-  }
+  .stat { text-align: center; }
   .stat-value {
     font-size: 2rem;
     font-weight: 700;
-    color: #5b8dee;
     line-height: 1;
   }
-  .stat-label {
-    font-size: 0.75rem;
-    color: #888;
-    margin-top: 4px;
-  }
+  .stat-value.blue { color: #5b8dee; }
+  .stat-value.amber { color: #ee8d5b; }
+  .stat-value.green { color: #5be89a; }
+  .stat-label { font-size: 0.75rem; color: #888; margin-top: 4px; }
+
   canvas {
     border-radius: 12px;
     background: #161b27;
@@ -70,52 +89,84 @@
     background: #161b27;
     padding: 10px 18px;
     border-radius: 8px;
+    text-align: center;
+    line-height: 1.7;
   }
-  .formula span { color: #5b8dee; font-weight: 600; }
+  .formula .blue { color: #5b8dee; font-weight: 600; }
+  .formula .amber { color: #ee8d5b; font-weight: 600; }
+  .formula .green { color: #5be89a; font-weight: 600; }
 </style>
 </head>
 <body>
 <h1>Points & Connections</h1>
-<p class="subtitle">See how connections grow as points are added</p>
+<p class="subtitle">See how connections grow — and how hubs reduce them</p>
 
+<!-- Stats -->
 <div class="stats">
   <div class="stat">
-    <div class="stat-value" id="pointCount">2</div>
-    <div class="stat-label">Points (n)</div>
+    <div class="stat-value blue" id="outerCount">2</div>
+    <div class="stat-label">Outer points (n)</div>
+  </div>
+  <div class="stat" id="statInner">
+    <div class="stat-value amber" id="innerCount">4</div>
+    <div class="stat-label">Inner hubs (m)</div>
   </div>
   <div class="stat">
-    <div class="stat-value" id="connCount">1</div>
-    <div class="stat-label">Connections</div>
+    <div class="stat-value green" id="totalConnCount">1</div>
+    <div class="stat-label">Total connections</div>
+  </div>
+  <div class="stat" id="statSaving" style="display:none">
+    <div class="stat-value green" id="savingCount">0</div>
+    <div class="stat-label">Connections saved</div>
   </div>
 </div>
 
+<!-- Controls -->
 <div class="controls">
   <div class="control-group">
-    <label for="slider">Number of points: <strong id="sliderVal">2</strong></label>
-    <input type="range" id="slider" min="1" max="30" value="2">
+    <label for="sliderOuter">Outer points: <strong id="sliderOuterVal">2</strong></label>
+    <div class="slider-row">
+      <button class="step-btn" id="outerDec">−</button>
+      <input type="range" id="sliderOuter" min="1" max="60" value="2">
+      <button class="step-btn" id="outerInc">+</button>
+    </div>
   </div>
   <div class="control-group">
-    <label for="animToggle">Auto-increment</label>
+    <label for="sliderInner">Inner hubs: <strong id="sliderInnerVal">0</strong></label>
+    <div class="slider-row">
+      <button class="step-btn" id="innerDec">−</button>
+      <input type="range" id="sliderInner" min="0" max="20" value="0">
+      <button class="step-btn" id="innerInc">+</button>
+    </div>
+  </div>
+  <div class="control-group">
+    <label for="animToggle">Auto-increment outer</label>
     <button id="animToggle" style="padding:6px 14px;border-radius:6px;border:1px solid #5b8dee;background:transparent;color:#5b8dee;cursor:pointer;font-size:0.85rem;">Start</button>
   </div>
 </div>
 
 <canvas id="canvas" width="600" height="440"></canvas>
 
-<div class="formula">
-  Connections = <span>n × (n − 1) / 2</span> &nbsp;—&nbsp; quadratic growth O(n²)
-</div>
+<div class="formula" id="formula"></div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const slider = document.getElementById('slider');
-const sliderVal = document.getElementById('sliderVal');
-const pointCount = document.getElementById('pointCount');
-const connCount = document.getElementById('connCount');
-const animToggle = document.getElementById('animToggle');
 
-// Resize canvas to fit container
+const sliderOuter = document.getElementById('sliderOuter');
+const sliderInner = document.getElementById('sliderInner');
+const sliderOuterVal = document.getElementById('sliderOuterVal');
+const sliderInnerVal = document.getElementById('sliderInnerVal');
+const animToggle = document.getElementById('animToggle');
+const formula = document.getElementById('formula');
+
+const outerCount = document.getElementById('outerCount');
+const innerCount = document.getElementById('innerCount');
+const totalConnCount = document.getElementById('totalConnCount');
+const savingCount = document.getElementById('savingCount');
+const statInner = document.getElementById('statInner');
+const statSaving = document.getElementById('statSaving');
+
 function resizeCanvas() {
   const maxW = Math.min(600, window.innerWidth - 48);
   canvas.width = maxW;
@@ -123,10 +174,11 @@ function resizeCanvas() {
   draw();
 }
 
-function getPoints(n) {
+function getCirclePoints(n, radiusFraction) {
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
-  const r = Math.min(canvas.width, canvas.height) * 0.38;
+  if (n === 1) return [{ x: cx, y: cy }];
+  const r = Math.min(canvas.width, canvas.height) * radiusFraction;
   const pts = [];
   for (let i = 0; i < n; i++) {
     const angle = (2 * Math.PI * i / n) - Math.PI / 2;
@@ -135,49 +187,154 @@ function getPoints(n) {
   return pts;
 }
 
-function draw() {
-  const n = parseInt(slider.value);
-  const connections = n > 1 ? n * (n - 1) / 2 : 0;
+function nearestInnerIndex(outerPt, innerPts) {
+  let best = 0, bestDist = Infinity;
+  innerPts.forEach((ip, i) => {
+    const dx = outerPt.x - ip.x, dy = outerPt.y - ip.y;
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) { bestDist = d; best = i; }
+  });
+  return best;
+}
 
-  sliderVal.textContent = n;
-  pointCount.textContent = n;
-  connCount.textContent = connections;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const pts = getPoints(n);
-
-  // Draw connections
-  const alpha = Math.max(0.04, Math.min(0.5, 1 / Math.sqrt(connections + 1)));
-  ctx.strokeStyle = `rgba(91, 141, 238, ${alpha})`;
-  ctx.lineWidth = 1;
-
-  for (let i = 0; i < pts.length; i++) {
-    for (let j = i + 1; j < pts.length; j++) {
-      ctx.beginPath();
-      ctx.moveTo(pts[i].x, pts[i].y);
-      ctx.lineTo(pts[j].x, pts[j].y);
-      ctx.stroke();
-    }
-  }
-
-  // Draw points on top
-  const dotR = n > 20 ? 4 : 6;
+function drawDots(pts, fillColor, dotR) {
   pts.forEach(p => {
     ctx.beginPath();
     ctx.arc(p.x, p.y, dotR, 0, 2 * Math.PI);
-    ctx.fillStyle = '#5b8dee';
-    ctx.shadowColor = '#5b8dee';
+    ctx.fillStyle = fillColor;
+    ctx.shadowColor = fillColor;
     ctx.shadowBlur = 10;
     ctx.fill();
     ctx.shadowBlur = 0;
   });
 }
 
-slider.addEventListener('input', draw);
+function draw() {
+  const n = parseInt(sliderOuter.value);
+  const m = parseInt(sliderInner.value);
+
+  sliderOuterVal.textContent = n;
+  sliderInnerVal.textContent = m;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.lineWidth = 1;
+
+  if (m === 0) {
+    // Direct mode: all outer points connected to each other
+    const connections = n > 1 ? n * (n - 1) / 2 : 0;
+    outerCount.textContent = n;
+    totalConnCount.textContent = connections;
+    statInner.style.display = 'none';
+    statSaving.style.display = 'none';
+
+    const pts = getCirclePoints(n, 0.38);
+    const alpha = Math.max(0.04, Math.min(0.5, 1 / Math.sqrt(connections + 1)));
+    ctx.strokeStyle = `rgba(91,141,238,${alpha})`;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        ctx.beginPath();
+        ctx.moveTo(pts[i].x, pts[i].y);
+        ctx.lineTo(pts[j].x, pts[j].y);
+        ctx.stroke();
+      }
+    }
+    drawDots(pts, '#5b8dee', n > 20 ? 4 : 6);
+
+    formula.innerHTML = `Connections = <span class="blue">n × (n − 1) / 2</span> &nbsp;—&nbsp; quadratic growth O(n²)`;
+
+  } else {
+    // Hub & spoke mode
+    const hubTotal = n + (m > 1 ? m * (m - 1) / 2 : 0);
+    const directEquiv = n > 1 ? n * (n - 1) / 2 : 0;
+    const saving = directEquiv - hubTotal;
+    const savingPct = directEquiv > 0 ? Math.round(saving / directEquiv * 100) : 0;
+
+    outerCount.textContent = n;
+    innerCount.textContent = m;
+    totalConnCount.textContent = hubTotal;
+    savingCount.textContent = saving;
+    statInner.style.display = '';
+    statSaving.style.display = '';
+
+    const outerPts = getCirclePoints(n, 0.38);
+    const innerPts = getCirclePoints(m, 0.18);
+
+    // Outer → nearest inner edges
+    const outerAlpha = Math.max(0.06, Math.min(0.55, 1 / Math.sqrt(n + 1)));
+    outerPts.forEach(op => {
+      const ni = nearestInnerIndex(op, innerPts);
+      ctx.beginPath();
+      ctx.moveTo(op.x, op.y);
+      ctx.lineTo(innerPts[ni].x, innerPts[ni].y);
+      ctx.strokeStyle = `rgba(91,141,238,${outerAlpha})`;
+      ctx.stroke();
+    });
+
+    // Inner → inner edges
+    if (m > 1) {
+      const innerConns = m * (m - 1) / 2;
+      const innerAlpha = Math.max(0.1, Math.min(0.7, 1 / Math.sqrt(innerConns + 1)));
+      ctx.strokeStyle = `rgba(238,141,91,${innerAlpha})`;
+      for (let i = 0; i < innerPts.length; i++) {
+        for (let j = i + 1; j < innerPts.length; j++) {
+          ctx.beginPath();
+          ctx.moveTo(innerPts[i].x, innerPts[i].y);
+          ctx.lineTo(innerPts[j].x, innerPts[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    drawDots(outerPts, '#5b8dee', n > 20 ? 4 : 5);
+    drawDots(innerPts, '#ee8d5b', 7);
+
+    formula.innerHTML =
+      `Hub connections = <span class="blue">n</span> (outer→hub) + <span class="amber">m×(m−1)/2</span> (hub→hub) = <span class="green">${hubTotal}</span><br>` +
+      `vs direct <span class="blue">n×(n−1)/2 = ${directEquiv}</span> &nbsp;—&nbsp; ` +
+      (saving > 0
+        ? `saves <span class="green">${saving} connections (${savingPct}%)</span>`
+        : `<span class="amber">no saving at these values</span>`);
+  }
+}
+
+sliderOuter.addEventListener('input', draw);
+sliderInner.addEventListener('input', draw);
+
+function step(slider, delta) {
+  const v = Math.min(parseInt(slider.max), Math.max(parseInt(slider.min), parseInt(slider.value) + delta));
+  slider.value = v;
+  draw();
+}
+
+function bindStepBtn(btnId, slider, delta) {
+  const btn = document.getElementById(btnId);
+  let interval = null;
+  let timeout = null;
+  function start() {
+    step(slider, delta);
+    timeout = setTimeout(() => {
+      interval = setInterval(() => step(slider, delta), 80);
+    }, 400);
+  }
+  function stop() {
+    clearTimeout(timeout);
+    clearInterval(interval);
+    timeout = null;
+    interval = null;
+  }
+  btn.addEventListener('mousedown', start);
+  btn.addEventListener('mouseup', stop);
+  btn.addEventListener('mouseleave', stop);
+  btn.addEventListener('touchstart', e => { e.preventDefault(); start(); });
+  btn.addEventListener('touchend', stop);
+}
+
+bindStepBtn('outerDec', sliderOuter, -1);
+bindStepBtn('outerInc', sliderOuter, +1);
+bindStepBtn('innerDec', sliderInner, -1);
+bindStepBtn('innerInc', sliderInner, +1);
 window.addEventListener('resize', resizeCanvas);
 
-// Auto-increment animation
 let animInterval = null;
 animToggle.addEventListener('click', () => {
   if (animInterval) {
@@ -187,9 +344,9 @@ animToggle.addEventListener('click', () => {
   } else {
     animToggle.textContent = 'Stop';
     animInterval = setInterval(() => {
-      let v = parseInt(slider.value) + 1;
-      if (v > parseInt(slider.max)) v = parseInt(slider.min);
-      slider.value = v;
+      let v = parseInt(sliderOuter.value) + 1;
+      if (v > parseInt(sliderOuter.max)) v = parseInt(sliderOuter.min);
+      sliderOuter.value = v;
       draw();
     }, 600);
   }
